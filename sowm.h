@@ -53,6 +53,7 @@ void win_kill(const Arg arg);
 void win_prev(const Arg arg);
 void win_next(const Arg arg);
 void win_to_ws(const Arg arg);
+void toggle_win_resize_mouse(const Arg arg);
 void ws_go(const Arg arg);
 void wm_quit(const Arg arg);
 

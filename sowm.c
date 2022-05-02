@@ -14,6 +14,7 @@ static client       *list = {0}, *ws_list[10] = {0}, *cur;
 static int          ws = 1, sw, sh, wx, wy, numlock = 0;
 static unsigned int ww, wh;
 static unsigned int running = 1;
+static unsigned int resize_mouse = 0;
 
 static Display      *d;
 static XButtonEvent mouse;
@@ -58,20 +59,30 @@ void notify_motion(XEvent *e) {
     int xd = e->xbutton.x_root - mouse.x_root;
     int yd = e->xbutton.y_root - mouse.y_root;
 
-    XMoveResizeWindow(d, mouse.subwindow,
-        wx + (mouse.button == 1 ? xd : 0),
-        wy + (mouse.button == 1 ? yd : 0),
-        MAX(1, ww + (mouse.button == 3 ? xd : 0)),
-        MAX(1, wh + (mouse.button == 3 ? yd : 0)));
+    if (resize_mouse)
+        XMoveResizeWindow(d, mouse.subwindow, wx, wy,
+            MAX(1, ww + xd), MAX(1, wh + yd));
+    else
+        XMoveResizeWindow(d, mouse.subwindow,
+            wx + ((mouse.button == 1) ? xd : 0),
+            wy + ((mouse.button == 1) ? yd : 0),
+            MAX(1, ww + ((mouse.button == 3) ? xd : 0)),
+            MAX(1, wh + ((mouse.button == 3) ? yd : 0)));
 }
 
 void key_press(XEvent *e) {
     KeySym keysym = XkbKeycodeToKeysym(d, e->xkey.keycode, 0, 0);
 
-    for (unsigned int i=0; i < sizeof(keys)/sizeof(*keys); ++i)
+    for (unsigned int i=0; i < sizeof(keys)/sizeof(*keys); ++i) {
         if (keys[i].keysym == keysym &&
             mod_clean(keys[i].mod) == mod_clean(e->xkey.state))
             keys[i].function(keys[i].arg);
+
+        if (keys[i].function == toggle_win_resize_mouse) {
+            mouse = e->xbutton;
+            win_size(e->xbutton.subwindow, &wx, &wy, &ww, &wh);
+        }
+    }
 }
 
 void button_press(XEvent *e) {
@@ -84,6 +95,12 @@ void button_press(XEvent *e) {
 
 void button_release(XEvent *e) {
     mouse.subwindow = 0;
+
+    if(resize_mouse) {
+        resize_mouse = 0;
+        XUngrabPointer(d, CurrentTime);
+        input_grab(root);
+    }
 }
 
 void win_add(Window w) {
@@ -175,6 +192,15 @@ void win_next(const Arg arg) {
 
     XRaiseWindow(d, cur->next->w);
     win_focus(cur->next);
+}
+
+void toggle_win_resize_mouse(const Arg arg) {
+    resize_mouse = 1;
+
+    XUngrabKey(d, AnyKey, AnyModifier, root);
+    XGrabPointer(d, root, True,
+                ButtonPressMask|ButtonReleaseMask|PointerMotionMask,
+                GrabModeAsync, GrabModeAsync, None, 0, CurrentTime);
 }
 
 void ws_go(const Arg arg) {
